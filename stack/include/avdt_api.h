@@ -42,7 +42,7 @@
 #define AVDTP_VERSION_CONFIG_KEY "AvdtpVersion"
 
 #define AVRCP_VERSION_BIT_MASK 0x0F0F
-#define AVRCP_FEAT_CA_BIT 0x0380
+#define AVRCP_FEAT_CA_BIT 0x0180
 #define AVRCP_FEAT_BRW_BIT 0x0040
 
 #define AVRCP_MASK_CA_BIT 0x1000
@@ -52,6 +52,7 @@
 #define AVDT_CODEC_SIZE 45
 #define AV_REM_CTRL_FEATURES_CONFIG_KEY "AvrcpFeatures"
 #define AV_REM_CTRL_VERSION_CONFIG_KEY "AvrcpCtVersion"
+#define BTIF_STORAGE_KEY_FOR_SUPPORTED_CODECS "Codecs"
 /* API function return value result codes. */
 #define AVDT_SUCCESS 0      /* Function successful */
 #define AVDT_BAD_PARAMS 1   /* Invalid parameters */
@@ -1000,4 +1001,15 @@ extern uint8_t AVDT_SetTraceLevel(uint8_t new_level);
  *
  ******************************************************************************/
 extern void AVDT_AssociateScb(uint8_t handle, const RawAddress& bd_addr);
+
+/*******************************************************************************
+ *
+ * Function         AVDT_GetPeerSeid
+ *
+ * Description      Get the seid of associated peer sep.
+ *
+ * Returns          uint8_t
+ *
+ ******************************************************************************/
+extern uint8_t AVDT_GetPeerSeid(uint8_t handle);
 #endif /* AVDT_API_H */

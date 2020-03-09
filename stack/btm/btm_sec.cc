@@ -4725,6 +4725,10 @@ void btm_sec_disconnected(uint16_t handle, uint8_t reason) {
 
   p_dev_rec->rs_disc_pending = BTM_SEC_RS_NOT_PENDING; /* reset flag */
 
+#if (defined(BTM_SAFE_REATTEMPT_ROLE_SWITCH) && BTM_SAFE_REATTEMPT_ROLE_SWITCH == TRUE)
+  p_dev_rec->switch_role_attempts = 0;
+#endif
+
 #if (BTM_DISC_DURING_RS == TRUE)
   LOG_INFO(LOG_TAG, "%s clearing pending flag handle:%d reason:%d", __func__,
            handle, reason);
@@ -5022,7 +5026,7 @@ static void btm_sec_pairing_timeout(UNUSED_ATTR void* data) {
   tBTM_AUTH_REQ auth_req = (btm_cb.devcb.loc_io_caps == BTM_IO_CAP_NONE)
                                ? BTM_AUTH_AP_NO
                                : BTM_AUTH_AP_YES;
-  uint8_t name[2];
+  BD_NAME name;
 
   p_dev_rec = btm_find_dev(p_cb->pairing_bda);
   tL2C_LCB *p_lcb = l2cu_find_lcb_by_bd_addr (p_cb->pairing_bda, BT_TRANSPORT_BR_EDR);
@@ -5450,10 +5454,13 @@ extern tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
     }
   }
 
-
+  /* synchronize pairing SDP and all profile connections except HID profile*/
   if ((p_dev_rec->sec_flags & BTM_SEC_PAIRING_IN_PROGRESS) &&
-       (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE)) {
+       (p_dev_rec->hci_handle != BTM_SEC_INVALID_HANDLE) &&
+       !((p_dev_rec->dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) ==
+         BTM_COD_MAJOR_PERIPHERAL)) {
 
+     BTM_TRACE_DEBUG("%s: Pairing SDP in progress", __func__);
      if ((!p_dev_rec->is_originator &&
           (p_dev_rec->security_required & BTM_SEC_IN_ENCRYPT)) ||
          (!p_dev_rec->is_originator &&

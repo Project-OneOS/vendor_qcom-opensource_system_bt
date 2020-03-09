@@ -173,7 +173,7 @@
 #endif
 
 #ifndef BTA_DM_SDP_DB_SIZE
-#define BTA_DM_SDP_DB_SIZE 8000
+#define BTA_DM_SDP_DB_SIZE 16000
 #endif
 
 #ifndef HL_INCLUDED
@@ -1486,5 +1486,15 @@ incoming connection
 #endif
 
 #include "bt_trace.h"
+
+/******************************************************************************
+ *
+ * Off target test
+ *
+ *****************************************************************************/
+/* Enable off target test */
+#ifndef OFF_TARGET_TEST_ENABLED
+#define OFF_TARGET_TEST_ENABLED FALSE
+#endif
 
 #endif /* BT_TARGET_H */

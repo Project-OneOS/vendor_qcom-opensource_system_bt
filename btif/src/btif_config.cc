@@ -143,9 +143,12 @@ static void read_or_set_metrics_salt() {
   }
   if (!AddressObfuscator::IsSaltValid(metrics_salt)) {
     LOG(INFO) << __func__ << ": Metrics salt is not invalid, creating new one";
+#if (OFF_TARGET_TEST_ENABLED == FALSE)
+    //TODO need to resolve below dependency
     if (RAND_bytes(metrics_salt.data(), metrics_salt.size()) != 1) {
       LOG(FATAL) << __func__ << "Failed to generate salt for metrics";
     }
+#endif
     if (!btif_config_set_bin(BT_CONFIG_METRICS_SECTION,
                              BT_CONFIG_METRICS_SALT_256BIT, metrics_salt.data(),
                              metrics_salt.size())) {
@@ -193,13 +196,13 @@ static future_t* init(void) {
     file_source = "Empty";
   }
 
-  if (!file_source.empty())
-    config_set_string(config, INFO_SECTION, FILE_SOURCE, file_source.c_str());
-
   if (!config) {
     LOG_ERROR(LOG_TAG, "%s unable to allocate a config object.", __func__);
     goto error;
   }
+
+  if (!file_source.empty())
+    config_set_string(config, INFO_SECTION, FILE_SOURCE, file_source.c_str());
 
   btif_config_remove_unpaired(config);
 
@@ -557,9 +560,12 @@ static void btif_config_write(UNUSED_ATTR uint16_t event,
   std::unique_lock<std::recursive_mutex> lock(config_lock);
   rename(CONFIG_FILE_PATH, CONFIG_BACKUP_PATH);
   config_t* config_paired = config_new_clone(config);
-  btif_config_remove_unpaired(config_paired);
-  config_save(config_paired, CONFIG_FILE_PATH);
-  config_free(config_paired);
+
+  if (config_paired != NULL) {
+    btif_config_remove_unpaired(config_paired);
+    config_save(config_paired, CONFIG_FILE_PATH);
+    config_free(config_paired);
+  }
 }
 
 static void btif_config_remove_unpaired(config_t* conf) {
@@ -581,7 +587,8 @@ static void btif_config_remove_unpaired(config_t* conf) {
           !config_has_key(conf, section, "LE_KEY_LCSRK") &&
           !config_has_key(conf, section, "AvrcpCtVersion") &&
           !config_has_key(conf, section, "AvrcpFeatures") &&
-          !config_has_key(conf, section, "TwsPlusPeerAddr")) {
+          !config_has_key(conf, section, "TwsPlusPeerAddr") &&
+          !config_has_key(conf, section, "Codecs")) {
         snode = config_section_next(snode);
         config_remove_section(conf, section);
         continue;

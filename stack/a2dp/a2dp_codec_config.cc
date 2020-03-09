@@ -632,6 +632,10 @@ A2dpCodecs::~A2dpCodecs() {
 bool A2dpCodecs::init(bool isMulticastEnabled) {
   LOG_DEBUG(LOG_TAG, "%s", __func__);
   std::lock_guard<std::recursive_mutex> lock(codec_mutex_);
+  ordered_source_codecs_.clear();
+  ordered_sink_codecs_.clear();
+  indexed_codecs_.clear();
+  disabled_codecs_.clear();
   for (int i = BTAV_A2DP_CODEC_INDEX_MIN; i < BTAV_A2DP_CODEC_INDEX_MAX; i++) {
     btav_a2dp_codec_index_t codec_index =
         static_cast<btav_a2dp_codec_index_t>(i);
@@ -1108,7 +1112,7 @@ bool A2DP_IsPeerSourceCodecValid(const uint8_t* p_codec_info) {
 bool A2DP_IsPeerSinkCodecValid(const uint8_t* p_codec_info) {
   tA2DP_CODEC_TYPE codec_type = A2DP_GetCodecType(p_codec_info);
 
-  LOG_VERBOSE(LOG_TAG, "%s: codec_type = 0x%x", __func__, codec_type);
+  LOG_DEBUG(LOG_TAG, "%s: codec_type = 0x%x", __func__, codec_type);
 
   switch (codec_type) {
     case A2DP_MEDIA_CT_SBC:

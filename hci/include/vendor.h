@@ -76,6 +76,8 @@ const vendor_t* vendor_get_interface();
 
 typedef enum {
   BT_CRASH_REASON_DEFAULT        =  0x00,
+
+  // SoC Crash Reasons
   BT_CRASH_REASON_RX_NULL        =  0x01,
   BT_CRASH_REASON_TX_RX_INVALID_PKT = 0x40,
   BT_CRASH_REASON_TX_RX_INVALID_LEN = 0x41,
@@ -97,7 +99,22 @@ typedef enum {
   BT_CRASH_REASON_IO_FATAL       =  0x8E,
   BT_CRASH_REASON_SSR_CMD        =  0x8F,
   BT_CRASH_REASON_POWERON        =  0x90,
-  BT_CRASH_REASON_WATCHDOG       =  0x91
+  BT_CRASH_REASON_WATCHDOG       =  0x91,
+
+  // Transport Driver Crash Reasons
+  BT_CRASH_REASON_UARTINIT_STUCK        =  0xB1,
+  BT_CRASH_REASON_GETVER_SEND_STUCK     =  0xB2,
+  BT_CRASH_REASON_GETVER_NO_RSP_RCVD    =  0xB3,
+  BT_CRASH_REASON_SETBAUDRATE_CMD_STUCK =  0xB4,
+  BT_CRASH_REASON_PATCH_DNLD_STUCK      =  0xB5,
+  BT_CRASH_REASON_GETBOARDID_CMD_STUCK  =  0xB6,
+  BT_CRASH_REASON_NVM_DNLD_STUCK        =  0xB7,
+  BT_CRASH_REASON_HCI_RESET_STUCK       =  0xB8,
+  BT_CRASH_REASON_GETBLDINFO_CMD_STUCK  =  0xB9,
+  BT_CRASH_REASON_ADDONFEAT_CMD_STUCK   =  0xBA,
+  BT_CRASH_REASON_ENHLOG_CMD_STUCK      =  0xBB,
+  BT_CRASH_REASON_DIAGINIT_STUCK        =  0xBC,
+  BT_CRASH_REASON_DIAGDEINIT_STUCK      =  0xBD,
 } soc_crash_reason_e;
 
 typedef struct {
@@ -129,6 +146,19 @@ static secondary_reason secondary_crash_reason [] = {
 { BT_CRASH_REASON_SSR_CMD                  ,    "SSR CMD"},
 { BT_CRASH_REASON_POWERON                  ,    "Power ON"},
 { BT_CRASH_REASON_WATCHDOG                 ,    "Watchdog"},
+{ BT_CRASH_REASON_UARTINIT_STUCK           ,    "UartInitStuck"},
+{ BT_CRASH_REASON_GETVER_SEND_STUCK        ,    "GetVerSendStuck"},
+{ BT_CRASH_REASON_GETVER_NO_RSP_RCVD       ,    "GetVerNoRspRcvd"},
+{ BT_CRASH_REASON_SETBAUDRATE_CMD_STUCK    ,    "SetBaudRateStuck"},
+{ BT_CRASH_REASON_PATCH_DNLD_STUCK         ,    "PatchDnldStuck"},
+{ BT_CRASH_REASON_GETBOARDID_CMD_STUCK     ,    "GetBoardIdStuck"},
+{ BT_CRASH_REASON_NVM_DNLD_STUCK           ,    "NvmDnldStuck"},
+{ BT_CRASH_REASON_HCI_RESET_STUCK          ,    "HciResetStuck"},
+{ BT_CRASH_REASON_GETBLDINFO_CMD_STUCK     ,    "GetBldInfoCmdStuck"},
+{ BT_CRASH_REASON_ADDONFEAT_CMD_STUCK      ,    "AddOnFeatCmdStuck"},
+{ BT_CRASH_REASON_ENHLOG_CMD_STUCK         ,    "EnhLogCmdStuck"},
+{ BT_CRASH_REASON_DIAGINIT_STUCK           ,    "DiagInitStuck"},
+{ BT_CRASH_REASON_DIAGDEINIT_STUCK         ,    "DiagDeinitStuck"},
 };
 
 enum host_crash_reason_e  {
@@ -139,7 +169,7 @@ enum host_crash_reason_e  {
   REASON_CLOSE_RCVD_DURING_INIT = 0x04,                //CLOSE RECEIVED FROM STACK DURING SOC INIT
   REASON_ERROR_READING_DATA_FROM_UART = 0x05,          //ERROR READING DATA FROM UART
   REASON_WRITE_FAIL_SPCL_BUFF_CRASH_SOC = 0x06,        //FAILED TO WRITE SPECIAL BYTES TO CRASH SOC
-  REASON_RX_THREAD_STRUCK = 0x07,                      //RX THREAD STRUCK
+  REASON_RX_THREAD_STUCK = 0x07,                       //RX THREAD STUCK
   REASON_SSR_CMD_TIMEDOUT = 0x10,                      //SSR DUE TO CMD TIMED OUT
   REASON_SSR_SPURIOUS_WAKEUP = 0x11,                   //SSR DUE TO SPURIOUS WAKE UP
   REASON_SSR_INVALID_BYTES_RCVD = 0x12,                //INVALID HCI CMD TYPE RECEIVED
@@ -151,6 +181,7 @@ enum host_crash_reason_e  {
   REASON_SOC_WAKEUP_FAILED_SOC_WAIT_TIMEOUT = 0x23,    //SOC WAKEUP FAILURE AND SOC CRASH WAIT TIMEOUT
   REASON_SOC_CRASHED_DIAG_SSR_SOC_WAIT_TIMEOUT = 0x24, //SOC CRASHED DIAG INITIATED SSR CRASH WAIT TIMEOUT
   REASON_NONE_SOC_WAIT_TIMEOUT = 0x25,                 //INVALID FAILURE AND SOC CRASH WAIT TIMEOUT
+  REASON_SOC_DEINIT_STUCK = 0x26,                      //SOC DEINIT STUCK
 };
 
 typedef struct {
@@ -166,7 +197,7 @@ static primary_reason primary_crash_reason [] = {
 { REASON_CLOSE_RCVD_DURING_INIT               , "Close received from stack during SOC init"},
 { REASON_ERROR_READING_DATA_FROM_UART         , "Error reading data from UART"},
 { REASON_WRITE_FAIL_SPCL_BUFF_CRASH_SOC       , "Failed to write special bytes to crash SOC"},
-{ REASON_RX_THREAD_STRUCK                     , "Rx Thread Struck"},
+{ REASON_RX_THREAD_STUCK                      , "Rx Thread Stuck"},
 { REASON_SSR_CMD_TIMEDOUT                     , "SSR due to command timed out"},
 { REASON_SSR_SPURIOUS_WAKEUP                  , "SSR due to spurious wakeup"},
 { REASON_SSR_INVALID_BYTES_RCVD               , "Invalid HCI cmd type received"},
@@ -179,6 +210,7 @@ static primary_reason primary_crash_reason [] = {
 { REASON_NONE_SOC_WAIT_TIMEOUT                , "Invalid Reason and SOC crash wait timeout"},
 { REASON_SOC_CRASHED_DIAG_SSR_SOC_WAIT_TIMEOUT, "SOC crashed with diag initiated SSR and SOC wait timeout"},
 { REASON_NONE_SOC_WAIT_TIMEOUT                , "Invalid Reason and SOC crash wait timeout"},
+{ REASON_SOC_DEINIT_STUCK                     , "SOC DeInit Stuck"},
 };
 
 void decode_crash_reason(uint8_t* p, uint8_t evt_len);

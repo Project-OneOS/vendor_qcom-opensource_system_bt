@@ -160,7 +160,7 @@ static bool is_pbap_adv_enabled();
 #define SDP_ENABLE_PTS_MAP  "vendor.bt.pts.map"
 #endif
 
-#define MAP_1_4 0x0103
+#define MAP_1_4 0x0104
 
 struct blacklist_entry
 {
@@ -190,8 +190,11 @@ uint16_t get_dut_avrcp_version() {
     } else if (!strncmp(AVRCP_1_5_STRING, avrcp_version,
                         sizeof(AVRCP_1_5_STRING))) {
       profile_version = AVRC_REV_1_5;
-    } else {
+    } else if (!strncmp(AVRCP_1_4_STRING, avrcp_version,
+                        sizeof(AVRCP_1_4_STRING))) {
       profile_version = AVRC_REV_1_4;
+    } else {
+      profile_version = AVRC_REV_1_3;
     }
     return profile_version;
 }
@@ -768,10 +771,7 @@ static void process_service_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
           if (!strncmp("false", a2dp_role, 5)) {
             profile_version = sdp_get_stored_avrc_tg_version(p_ccb->device_address);
             uint16_t ver = (AVRCP_VERSION_BIT_MASK & profile_version);
-            is_avrcp_browse_bit_set = ((AVRCP_MASK_BRW_BIT & profile_version) == AVRCP_MASK_BRW_BIT);
-            is_avrcp_cover_bit_set = ((AVRCP_MASK_CA_BIT & profile_version) == AVRCP_MASK_CA_BIT);
-            if (ver >= AVRC_REV_1_4 &&
-                (is_avrcp_browse_bit_set | is_avrcp_cover_bit_set)) {
+            if (ver >= AVRC_REV_1_4) {
               p_attr->value_ptr[PROFILE_VERSION_POSITION] = (uint8_t)(ver & 0x00ff);
               SDP_TRACE_DEBUG("%s :Showing AVRCP version in SDP = 0x%x", __func__,
                                p_attr->value_ptr[PROFILE_VERSION_POSITION]);
@@ -1092,10 +1092,7 @@ static void process_service_search_attr_req(tCONN_CB* p_ccb, uint16_t trans_num,
             if (!strncmp("false", a2dp_role, 5)) {
               profile_version = sdp_get_stored_avrc_tg_version(p_ccb->device_address);
               uint16_t ver = (AVRCP_VERSION_BIT_MASK & profile_version);
-              is_avrcp_browse_bit_set = ((AVRCP_MASK_BRW_BIT & profile_version) == AVRCP_MASK_BRW_BIT);
-              is_avrcp_cover_bit_set = ((AVRCP_MASK_CA_BIT & profile_version) == AVRCP_MASK_CA_BIT);
-              if (ver >= AVRC_REV_1_4 &&
-                  (is_avrcp_browse_bit_set | is_avrcp_cover_bit_set)) {
+              if (ver >= AVRC_REV_1_4) {
                 p_attr->value_ptr[PROFILE_VERSION_POSITION] = (uint8_t)(ver & 0x00ff);
                 SDP_TRACE_DEBUG("%s : Showing AVRCP version in SDP = 0x%x", __func__,
                                  p_attr->value_ptr[PROFILE_VERSION_POSITION]);
@@ -1570,15 +1567,19 @@ void update_pce_entry_after_cancelling_bonding(RawAddress remote_addr) {
     APPL_TRACE_ERROR("%s unable to open PBAP PCE Conf file for read: error: (%s)",\
                                                       __func__, strerror(errno));
   } else {
+    int size_read = 0;
+    int entry_size = sizeof(dynamic_upgrade_entry);
     while (fread(&entry, sizeof(entry), 1, fp) != 0)
     {
+      size_read += sizeof(entry);
       APPL_TRACE_DEBUG("Entry: addr = %x:%x:%x, ver = 0x%x",\
               entry.addr[0], entry.addr[1], entry.addr[2], entry.ver);
       if(!memcmp(&remote_addr, entry.addr, 3))
       {
-        APPL_TRACE_DEBUG("remote bd address matched, rebonded = %c", entry.rebonded);
-        if (entry.rebonded == 'N') {
-            fseek(fp, -(sizeof(dynamic_upgrade_entry)), SEEK_CUR);
+        APPL_TRACE_DEBUG("remote bd address matched, rebonded = %c,"
+            " entry_size = %d, size_read = %d", entry.rebonded, entry_size, size_read);
+        if (entry.rebonded == 'N' && entry_size <= size_read) {
+            fseek(fp, -(entry_size), SEEK_CUR);
             entry.rebonded = 'Y';
             fwrite(&entry, sizeof(entry), 1, fp);
         }
@@ -1830,15 +1831,19 @@ void update_mce_entry_after_cancelling_bonding(RawAddress remote_addr) {
     APPL_TRACE_ERROR("%s unable to open MAP MCE Conf file for read: Reason: (%s)",\
                                                       __func__, strerror(errno));
   } else {
+    int size_read = 0;
+    int entry_size = sizeof(dynamic_upgrade_entry);
     while (fread(&entry, sizeof(entry), 1, fp) != 0)
     {
+      size_read += sizeof(entry);
       APPL_TRACE_DEBUG("Entry: addr = %x:%x:%x, ver = 0x%x",\
               entry.addr[0], entry.addr[1], entry.addr[2], entry.ver);
       if(!memcmp(&remote_addr, entry.addr, 3))
       {
-        APPL_TRACE_DEBUG("remote bd address matched, rebonded = %c", entry.rebonded);
-        if (entry.rebonded == 'N') {
-            fseek(fp, -(sizeof(dynamic_upgrade_entry)), SEEK_CUR);
+        APPL_TRACE_DEBUG("remote bd address matched, rebonded = %c,"
+            " entry_size = %d, size_read = %d", entry.rebonded, entry_size, size_read);
+        if (entry.rebonded == 'N' && entry_size <= size_read) {
+            fseek(fp, -(entry_size), SEEK_CUR);
             entry.rebonded = 'Y';
             fwrite(&entry, sizeof(entry), 1, fp);
         }

@@ -911,11 +911,17 @@ static void bta_ag_bind_response(tBTA_AG_SCB* p_scb, uint8_t arg_type) {
  ******************************************************************************/
 static bool bta_ag_parse_biev_response(tBTA_AG_SCB* p_scb, tBTA_AG_VAL* val) {
   char* p_token = strtok(val->str, ",");
+  if (p_token == NULL) {
+     APPL_TRACE_WARNING("%s received invalid string %s", __func__,
+                       val->str);
+     return false;
+  }
+
   uint16_t rcv_ind_id = atoi(p_token);
 
   p_token = strtok(NULL, ",");
   if (p_token == NULL) {
-     APPL_TRACE_DEBUG("%s received invalid string %s", __func__,
+     APPL_TRACE_WARNING("%s received invalid string %s", __func__,
                        val->str);
      return false;
   }
@@ -1720,8 +1726,8 @@ void bta_ag_hfp_result(tBTA_AG_SCB* p_scb, tBTA_AG_API_RESULT* p_result) {
          /* Ensure that call active indicator is sent prior to SCO connection
             request by adding some delay. Some remotes are very strict in the
             order of call indicator and SCO connection request. */
-         APPL_TRACE_IMP("%s: sleeping 20msec before opening sco", __func__);
-         usleep(20*1000);
+         APPL_TRACE_IMP("%s: sleeping 200msec before opening sco", __func__);
+         usleep(200*1000);
       }
 
       if (!(p_scb->features & BTA_AG_FEAT_NOSCO)) {

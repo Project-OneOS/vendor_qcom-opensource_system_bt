@@ -796,6 +796,24 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
       break;
 
 #if (SWB_ENABLED == TRUE)
+    case BTA_AG_AT_QAC_EVT:
+      BTIF_TRACE_DEBUG("QAC-EVT: AG Bitmap of peer-codecs %d", p_data->val.num);
+      /* If the peer supports SWB and the BTIF preferred codec is also SWB,
+      then we should set the BTA AG Codec to SWB. This would trigger a +QCS
+      to SWB at the time of SCO connection establishment */
+      if (!get_swb_codec_status()) break;
+
+      if (p_data->val.num == BTA_AG_SCO_SWB_SETTINGS_Q0) {
+        BTIF_TRACE_EVENT("%s: btif_hf override-Preferred Codec to SWB",
+                         __func__);
+        BTA_AgSetCodec(btif_hf_cb[idx].handle, BTA_AG_SCO_SWB_SETTINGS_Q0);
+      } else {
+        BTIF_TRACE_EVENT("%s btif_hf override-Preferred Codec to MSBC",
+                         __func__);
+        BTA_AgSetCodec(btif_hf_cb[idx].handle, BTA_AG_CODEC_MSBC);
+      }
+      break;
+
     case BTA_AG_AT_QCS_EVT:
       BTIF_TRACE_DEBUG("%s: AG final selected SWB codec is 0x%02x 0=Q0 4=Q1 6=Q3 7=Q4",
                        __func__, p_data->val.num);
@@ -885,7 +903,7 @@ static void bte_hf_evt(tBTA_AG_EVT event, tBTA_AG* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-static void btif_in_hf_generic_evt(uint16_t event, char* p_param) {
+void btif_in_hf_generic_evt(uint16_t event, char* p_param) {
   int idx = btif_hf_idx_by_bdaddr((RawAddress*)p_param);
 
   BTIF_TRACE_EVENT("%s: event=%d", __func__, event);
@@ -895,12 +913,25 @@ static void btif_in_hf_generic_evt(uint16_t event, char* p_param) {
     return;
   }
 
+  BTIF_TRACE_DEBUG("%s: audio state = %d for device: %s", __func__,
+       btif_hf_cb[idx].audio_state, btif_hf_cb[idx].connected_bda.ToString().c_str());
   switch (event) {
     case BTIF_HFP_CB_AUDIO_CONNECTING: {
-      BTIF_TRACE_DEBUG("%s: Moving the audio_state to CONNECTING for device %s",
+      if (btif_hf_cb[idx].audio_state != BTHF_AUDIO_STATE_CONNECTED) {
+        BTIF_TRACE_DEBUG("%s: Moving the audio_state to CONNECTING for device %s",
+                  __FUNCTION__, btif_hf_cb[idx].connected_bda.ToString().c_str());
+        btif_hf_cb[idx].audio_state = BTHF_AUDIO_STATE_CONNECTING;
+        HAL_HF_CBACK(bt_hf_callbacks, AudioStateCallback, BTHF_AUDIO_STATE_CONNECTING,
+                &btif_hf_cb[idx].connected_bda);
+      } else {
+        BTIF_TRACE_WARNING("%s :unexpected audio state", __func__);
+      }
+    } break;
+    case BTIF_HFP_CB_AUDIO_DISCONNECTED: {
+      BTIF_TRACE_DEBUG("%s: Moving the audio_state to DISCONNECTED for device %s",
                 __FUNCTION__, btif_hf_cb[idx].connected_bda.ToString().c_str());
-      btif_hf_cb[idx].audio_state = BTHF_AUDIO_STATE_CONNECTING;
-      HAL_HF_CBACK(bt_hf_callbacks, AudioStateCallback, BTHF_AUDIO_STATE_CONNECTING,
+      btif_hf_cb[idx].audio_state = BTHF_AUDIO_STATE_DISCONNECTED;
+      HAL_HF_CBACK(bt_hf_callbacks, AudioStateCallback, BTHF_AUDIO_STATE_DISCONNECTED,
               &btif_hf_cb[idx].connected_bda);
     } break;
     default: {
@@ -1130,19 +1161,22 @@ bt_status_t HeadsetInterface::ConnectAudio(RawAddress* bd_addr) {
     return BT_STATUS_NOT_READY;
   }
 
+  /* Check if SCO is already connecting/connected for the same device*/
+  if (btif_hf_cb[idx].audio_state == BTHF_AUDIO_STATE_CONNECTING ||
+     btif_hf_cb[idx].audio_state == BTHF_AUDIO_STATE_CONNECTED) {
+    BTIF_TRACE_WARNING("%s: Ignore SCO connection as audio_state for device %s: is %d",
+    __func__, btif_hf_cb[idx].connected_bda.ToString().c_str(),
+    btif_hf_cb[idx].audio_state);
+    return BT_STATUS_SUCCESS;
+  }
+
   // if SCO is setting up, don't allow SCO connection
   for (int i = 0; i < btif_max_hf_clients; i++) {
     if (btif_hf_cb[i].audio_state == BTHF_AUDIO_STATE_CONNECTING) {
-       if (*bd_addr == btif_hf_cb[i].connected_bda) {
-          BTIF_TRACE_WARNING("%s: SCO setting up with same active device %s: ",
-           __func__, btif_hf_cb[i].connected_bda.ToString().c_str());
-          return BT_STATUS_SUCCESS;
-       } else {
-          BTIF_TRACE_ERROR("%s: SCO setting up with %s, not allowing SCO connection with %s",
-           __func__, btif_hf_cb[i].connected_bda.ToString().c_str(),
-          bd_addr->ToString().c_str());
-          return BT_STATUS_FAIL;
-       }
+      BTIF_TRACE_ERROR("%s: SCO setting up with %s, not allowing SCO connection with %s",
+      __func__, btif_hf_cb[i].connected_bda.ToString().c_str(),
+      bd_addr->ToString().c_str());
+      return BT_STATUS_FAIL;
     }
   }
 
@@ -1158,16 +1192,17 @@ bt_status_t HeadsetInterface::ConnectAudio(RawAddress* bd_addr) {
 
 #if (TWS_AG_ENABLED == TRUE)
   if (btif_is_tws_plus_device(bd_addr) &&
-      btif_hf_cb[idx].twsp_state != TWSPLUS_EB_STATE_INEAR) {
+      !btif_hf_check_twsp_state_for_sco(idx)) {
     RawAddress peer_eb_addr;
     int peer_idx;
 
-    BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear", __FUNCTION__);
+    BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear",__FUNCTION__);
     btif_tws_plus_get_peer_eb_addr(bd_addr, &peer_eb_addr);
     peer_idx = btif_hf_idx_by_bdaddr(&peer_eb_addr);
 
     if (peer_idx != BTIF_HF_INVALID_IDX && IsSlcConnected(&peer_eb_addr) &&
-        btif_hf_cb[peer_idx].twsp_state == TWSPLUS_EB_STATE_INEAR) {
+        btif_hf_cb[peer_idx].twsp_state != TWSPLUS_EB_STATE_OUT_OF_EAR &&
+        btif_hf_cb[peer_idx].twsp_state != TWSPLUS_EB_STATE_INCASE) {
       BTIF_TRACE_DEBUG("%s: Create SCO with the other earbud in ear", __FUNCTION__);
       BTA_AgAudioOpen(btif_hf_cb[peer_idx].handle);
 
@@ -1608,7 +1643,7 @@ bt_status_t HeadsetInterface::ClccResponse(int index, bthf_call_direction_t dir,
         snprintf(&ag_res.str[res_strlen], rem_bytes - 4, ",\"%s\"", dialnum);
         std::stringstream remaining_string;
         remaining_string << "," << type;
-        strlcat(&ag_res.str[res_strlen], remaining_string.str().c_str(), sizeof(ag_res.str));
+        strlcat(ag_res.str, remaining_string.str().c_str(), sizeof(ag_res.str));
         BTIF_TRACE_EVENT("clcc_response: The CLCC response is, ag_res.str: %s", ag_res.str);
       }
     }
@@ -1726,14 +1761,11 @@ bt_status_t HeadsetInterface::PhoneStateChange(
        if (btif_hf_cb[idx].audio_state != BTHF_AUDIO_STATE_CONNECTED) {
 #if (TWS_AG_ENABLED == TRUE)
            if (btif_is_tws_plus_device(bd_addr) &&
-               btif_hf_cb[idx].twsp_state != TWSPLUS_EB_STATE_INEAR) {
+               !btif_hf_check_twsp_state_for_sco(idx)) {
                BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear", __FUNCTION__);
            } else {
 #endif
                ag_res.audio_handle = control_block.handle;
-               BTIF_TRACE_DEBUG("%s: Moving the audio_state to CONNECTING for device %s",
-                      __FUNCTION__, bd_addr->ToString().c_str());
-               btif_hf_cb[idx].audio_state = BTHF_AUDIO_STATE_CONNECTING;
                btif_transfer_context(btif_in_hf_generic_evt, BTIF_HFP_CB_AUDIO_CONNECTING,
                                  (char*)(&btif_hf_cb[idx].connected_bda), sizeof(RawAddress), NULL);
 #if (TWS_AG_ENABLED == TRUE)
@@ -1781,14 +1813,11 @@ bt_status_t HeadsetInterface::PhoneStateChange(
                 if (btif_hf_cb[idx].audio_state != BTHF_AUDIO_STATE_CONNECTED) {
 #if (TWS_AG_ENABLED == TRUE)
                   if (btif_is_tws_plus_device(bd_addr) &&
-                    btif_hf_cb[idx].twsp_state != TWSPLUS_EB_STATE_INEAR) {
-                    BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear", __FUNCTION__);
+                      !btif_hf_check_twsp_state_for_sco(idx)) {
+                    BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear",__FUNCTION__);
                   } else {
 #endif
                     ag_res.audio_handle = control_block.handle;
-                    BTIF_TRACE_DEBUG("%s: Moving the audio_state to CONNECTING for device %s",
-                           __FUNCTION__, bd_addr->ToString().c_str());
-                    control_block.audio_state = BTHF_AUDIO_STATE_CONNECTING;
                     btif_transfer_context(btif_in_hf_generic_evt, BTIF_HFP_CB_AUDIO_CONNECTING,
                                  (char*)(&btif_hf_cb[idx].connected_bda), sizeof(RawAddress), NULL);
 #if (TWS_AG_ENABLED == TRUE)
@@ -1829,6 +1858,8 @@ bt_status_t HeadsetInterface::PhoneStateChange(
           if (is_active_device(*bd_addr) &&
               (btif_hf_features & BTA_AG_FEAT_INBAND)) {
             ag_res.audio_handle = control_block.handle;
+            btif_transfer_context(btif_in_hf_generic_evt, BTIF_HFP_CB_AUDIO_CONNECTING,
+                     (char*)(&btif_hf_cb[idx].connected_bda), sizeof(RawAddress), NULL);
           }
         }
         if (number) {
@@ -1888,15 +1919,12 @@ bt_status_t HeadsetInterface::PhoneStateChange(
         {
 #if (TWS_AG_ENABLED == TRUE)
           if (btif_is_tws_plus_device(bd_addr) &&
-            btif_hf_cb[idx].twsp_state != TWSPLUS_EB_STATE_INEAR) {
+              !btif_hf_check_twsp_state_for_sco(idx)) {
             BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear", __FUNCTION__);
           } else {
 #endif
             ag_res.audio_handle = control_block.handle;
 
-            BTIF_TRACE_DEBUG("%s: Moving the audio_state to CONNECTING for device %s",
-                       __FUNCTION__, bd_addr->ToString().c_str());
-            control_block.audio_state = BTHF_AUDIO_STATE_CONNECTING;
             btif_transfer_context(btif_in_hf_generic_evt, BTIF_HFP_CB_AUDIO_CONNECTING,
                                   (char*)(&btif_hf_cb[idx].connected_bda), sizeof(RawAddress), NULL);
 #if (TWS_AG_ENABLED == TRUE)
@@ -1917,15 +1945,12 @@ bt_status_t HeadsetInterface::PhoneStateChange(
             (btif_hf_cb[idx].audio_state != BTHF_AUDIO_STATE_CONNECTED)) {
 #if (TWS_AG_ENABLED == TRUE)
           if (btif_is_tws_plus_device(bd_addr) &&
-            btif_hf_cb[idx].twsp_state != TWSPLUS_EB_STATE_INEAR) {
+              !btif_hf_check_twsp_state_for_sco(idx)) {
             BTIF_TRACE_DEBUG("%s: Not create SCO since earbud is not in ear", __FUNCTION__);
           } else {
 #endif
             ag_res.audio_handle = control_block.handle;
 
-            BTIF_TRACE_DEBUG("%s: Moving the audio_state to CONNECTING for device %s",
-                        __FUNCTION__, bd_addr->ToString().c_str());
-            control_block.audio_state = BTHF_AUDIO_STATE_CONNECTING;
             btif_transfer_context(btif_in_hf_generic_evt, BTIF_HFP_CB_AUDIO_CONNECTING,
                                   (char*)(&btif_hf_cb[idx].connected_bda), sizeof(RawAddress), NULL);
 #if (TWS_AG_ENABLED == TRUE)
