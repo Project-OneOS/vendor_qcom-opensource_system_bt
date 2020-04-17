@@ -485,6 +485,13 @@ typedef struct {
   tBTA_AV_LATENCY sink_delay;
 } tBTA_AV_DELAY_RPT;
 
+/* data associated with BTA_AV_OFFLOAD_START_RSP*/
+typedef struct {
+  tBTA_AV_HNDL hndl;
+  tBTA_AV_STATUS status;
+  uint8_t stream_start;
+} tBTA_AV_OFFLOAD_RSP;
+
 /* union of data associated with AV callback */
 typedef union {
   tBTA_AV_CHNL chnl;
@@ -513,6 +520,7 @@ typedef union {
   tBTA_AV_STATUS status;
   tBTA_AV_ROLE_CHANGED role_changed;
   tBTA_AV_DELAY_RPT delay_rpt;
+  tBTA_AV_OFFLOAD_RSP offload_rsp;
 } tBTA_AV;
 
 typedef struct {
